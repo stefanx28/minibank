@@ -5,10 +5,12 @@ import lombok.AllArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
+import ro.axonsoft.eval.minibank.dto.response.TransactionResponse;
 import ro.axonsoft.eval.minibank.exception.AccountNotFoundException;
 import ro.axonsoft.eval.minibank.dto.request.AccountCreateRequest;
 import ro.axonsoft.eval.minibank.dto.response.AccountResponse;
 import ro.axonsoft.eval.minibank.model.Accounts;
+import ro.axonsoft.eval.minibank.model.Transactions;
 import ro.axonsoft.eval.minibank.repository.AccountsRepository;
 import ro.axonsoft.eval.minibank.repository.TransactionsRepository;
 
@@ -66,6 +68,46 @@ public class AccountsService {
         response.put("totalPages", totalPages);
         response.put("number", page);
         response.put("size", size);
+        return response;
+    }
+
+
+    public Map<String, Object> getTransactions(Long accountId, int page, int size) {
+        if (!accountsRepository.existsById(accountId)) {
+            throw new AccountNotFoundException("Account not found: " + accountId);
+        }
+
+        List<Transactions> all = transactionsRepository.findByAccountIdOrderByTimestampAsc(accountId);
+        int totalElements = all.size();
+        int totalPages = (int) Math.ceil((double) totalElements / size);
+        int offset = page * size;
+
+        List<TransactionResponse> content = all.stream()
+                .skip(offset)
+                .limit(size)
+                .map(this::toTransactionResponse)
+                .toList();
+
+        Map<String, Object> response = new LinkedHashMap<>();
+        response.put("content", content);
+        response.put("totalElements", totalElements);
+        response.put("totalPages", totalPages);
+        response.put("number", page);
+        response.put("size", size);
+        return response;
+    }
+
+
+    private TransactionResponse toTransactionResponse(Transactions transaction) {
+        TransactionResponse response = new TransactionResponse();
+        response.setId(transaction.getId());
+        response.setTimestamp(transaction.getTimestamp());
+        response.setType(transaction.getType());
+        response.setAmount(transaction.getAmount().setScale(2, RoundingMode.HALF_EVEN));
+        response.setCurrency(transaction.getCurrency());
+        response.setBalanceAfter(transaction.getBalanceAfter().setScale(2, RoundingMode.HALF_EVEN));
+        response.setCounterpartyIban(transaction.getCounterpartyIban());
+        response.setTransferId(transaction.getTransfer().getId());
         return response;
     }
 

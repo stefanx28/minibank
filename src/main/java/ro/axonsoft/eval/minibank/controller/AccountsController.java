@@ -8,6 +8,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.*;
 import ro.axonsoft.eval.minibank.dto.request.AccountCreateRequest;
 import ro.axonsoft.eval.minibank.dto.response.AccountResponse;
+import ro.axonsoft.eval.minibank.dto.response.TransactionResponse;
 import ro.axonsoft.eval.minibank.service.AccountsService;
 
 import java.awt.print.Pageable;
@@ -35,6 +36,14 @@ public class AccountsController {
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "10") int size) {
         return accountsService.getAllAccounts(page, size);
+    }
+
+    @GetMapping("/{accountID}/transactions")
+    public Map<String, Object> getTransactions(
+            @PathVariable Long accountID,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "10") int size){
+        return accountsService.getTransactions(accountID, page, size);
     }
 }
 

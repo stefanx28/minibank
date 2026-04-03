@@ -116,10 +116,66 @@ public class TransfersService {
         Transfers saved = transfersRepository.save(transfer);
 
         //create transaction record TODO!!
+        createTransaction(src, target, saved, amount, targetAmount);
 
         return toResponse(saved);
     }
 
+
+    private void createTransaction(Accounts src, Accounts target, Transfers transfer, BigDecimal amount, BigDecimal targetAmount){
+
+        boolean srcBank = BANK_ACCOUNT_ID.equals(src.getId());
+        boolean targetBank = BANK_ACCOUNT_ID.equals(target.getId());
+
+        //deposit on bank
+        if(srcBank){
+            Transactions deposit = new Transactions();
+            deposit.setAccount(target);
+            deposit.setTransfer(transfer);
+            deposit.setType(TransactionType.DEPOSIT);
+            deposit.setAmount(targetAmount);
+            deposit.setCurrency(target.getCurrency());
+            deposit.setBalanceAfter(target.getBalance());
+            deposit.setCounterpartyIban(null);
+            transactionsRepository.save(deposit);
+        }
+        //withdrawal
+        else if (targetBank) {
+            Transactions withdrawal = new Transactions();
+            withdrawal.setAccount(src);
+            withdrawal.setTransfer(transfer);
+            withdrawal.setType(TransactionType.WITHDRAWAL);
+            withdrawal.setAmount(amount);
+            withdrawal.setCurrency(src.getCurrency());
+            withdrawal.setBalanceAfter(src.getBalance());
+            withdrawal.setCounterpartyIban(null);
+            transactionsRepository.save(withdrawal);
+        }
+        //transfer between two accounts
+        else{
+            Transactions transferOut = new Transactions();
+            transferOut.setAccount(src);
+            transferOut.setTransfer(transfer);
+            transferOut.setType(TransactionType.TRANSFER_OUT);
+            transferOut.setAmount(amount);
+            transferOut.setCurrency(src.getCurrency());
+            transferOut.setBalanceAfter(src.getBalance());
+            transferOut.setCounterpartyIban(target.getIban());
+            transactionsRepository.save(transferOut);
+
+
+            Transactions transferIn = new Transactions();
+            transferIn.setAccount(target);
+            transferIn.setTransfer(transfer);
+            transferIn.setType(TransactionType.TRANSFER_IN);
+            transferIn.setAmount(targetAmount);
+            transferIn.setCurrency(target.getCurrency());
+            transferIn.setBalanceAfter(target.getBalance());
+            transferIn.setCounterpartyIban(src.getIban());
+            transactionsRepository.save(transferIn);
+        }
+
+    }
 
 
     public TransferResponse getTransfer(Long id) {

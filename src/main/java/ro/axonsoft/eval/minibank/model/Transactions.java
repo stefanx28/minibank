@@ -26,7 +26,7 @@ public class Transactions {
     private BigDecimal amount;
 
     @Column(nullable = false, length = 3)
-    private String currency;
+    private Currency currency;
 
     @Column(nullable = false, precision = 19, scale = 4)
     private BigDecimal balanceAfter;

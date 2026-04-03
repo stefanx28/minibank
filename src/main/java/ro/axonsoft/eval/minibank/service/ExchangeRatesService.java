@@ -3,7 +3,7 @@ package ro.axonsoft.eval.minibank.service;
 import lombok.AllArgsConstructor;
 import org.springframework.stereotype.Service;
 import ro.axonsoft.eval.minibank.model.Currency;
-import ro.axonsoft.eval.minibank.model.ExchangeRatesProperties;
+import ro.axonsoft.eval.minibank.config.ExchangeRatesProperties;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;

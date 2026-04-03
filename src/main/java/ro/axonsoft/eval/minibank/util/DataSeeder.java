@@ -22,7 +22,7 @@ public class DataSeeder implements CommandLineRunner {
     public void run(String... args) {
         if (accountsRepository.count() == 0) {
             Accounts bank = new Accounts();
-            bank.setOwnerName("MiniBank System");
+            bank.setOwnerName("Bank");
             bank.setIban("RO49AAAA1B31007593840000");
             bank.setCurrency(Currency.RON);
             bank.setAccountType(AccountType.CHECKING);
