@@ -23,6 +23,7 @@ public class Accounts {
     @Column(nullable = false, unique = true, length = 34)
     private String iban;
 
+    @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 3)
     private Currency currency;
 
