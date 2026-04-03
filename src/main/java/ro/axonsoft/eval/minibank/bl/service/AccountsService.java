@@ -2,6 +2,10 @@ package ro.axonsoft.eval.minibank.bl.service;
 
 import jakarta.transaction.Transactional;
 import lombok.AllArgsConstructor;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import ro.axonsoft.eval.minibank.bl.dto.response.TransactionResponse;
 import ro.axonsoft.eval.minibank.bl.mapper.AccountMapper;
@@ -15,7 +19,7 @@ import ro.axonsoft.eval.minibank.domain.model.Transactions;
 import ro.axonsoft.eval.minibank.dal.repository.AccountsRepository;
 import ro.axonsoft.eval.minibank.dal.repository.TransactionsRepository;
 import ro.axonsoft.eval.minibank.util.IbanValidator;
-
+import ro.axonsoft.eval.minibank.util.PaginationUtil;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
@@ -30,7 +34,6 @@ public class AccountsService {
     private final AccountsRepository accountsRepository;
     private final TransactionsRepository transactionsRepository;
 
-
     @Transactional
     public AccountResponse createAccount(AccountCreateRequest request){
 
@@ -38,7 +41,8 @@ public class AccountsService {
         if(!isIbanValid){
             throw new InvalidIbanException("Iban invalid");
         }
-        if (accountsRepository.existsByIban(request.getIban())) {
+        boolean isIbanUsed = accountsRepository.existsByIban(request.getIban());
+        if (isIbanUsed) {
             throw new DuplicateIbanException("IBAN already in use: " + request.getIban());
         }
 
@@ -48,61 +52,28 @@ public class AccountsService {
         return toResponse(saved);
     }
 
-
-    public AccountResponse getAccount(Long id){
-        Accounts account = accountsRepository.findById(id).orElseThrow(
-                () -> new AccountNotFoundException("Account not found: " + id)
+    public AccountResponse getAccount(Long accountId){
+        Accounts account = accountsRepository.findById(accountId).orElseThrow(
+                () -> new AccountNotFoundException("Account not found: " + accountId)
         );
         return toResponse(account);
     }
 
-    public Map<String, Object> getAllAccounts(int page, int size) {
-        int offset = page * size;
-        List<Accounts> all = accountsRepository.findAll();
-        int totalElements = all.size();
-        int totalPages = (int) Math.ceil((double) totalElements / size);
+    public Map<String, Object> getAllAccounts(int pageNumber, int pageSize) {
+        PageRequest pageable = PageRequest.of(pageNumber, pageSize, Sort.by("id").ascending());
+        Page<Accounts> accountsPage = accountsRepository.findAll(pageable);
 
-        List<AccountResponse> content = all.stream()
-                .skip(offset)
-                .limit(size)
-                .map(this::toResponse)
-                .toList();
-
-        Map<String, Object> response = new LinkedHashMap<>();
-        response.put("content", content);
-        response.put("totalElements", totalElements);
-        response.put("totalPages", totalPages);
-        response.put("number", page);
-        response.put("size", size);
-        return response;
+        return PaginationUtil.toPaginatedResponse(accountsPage, this::toResponse);
     }
 
-
-    public Map<String, Object> getTransactions(Long accountId, int page, int size) {
+    public Map<String, Object> getTransactions(Long accountId, int pageNumber, int pageSize) {
         if (!accountsRepository.existsById(accountId)) {
             throw new AccountNotFoundException("Account not found: " + accountId);
         }
-
-        List<Transactions> all = transactionsRepository.findByAccountIdOrderByTimestampAsc(accountId);
-        int totalElements = all.size();
-        int totalPages = (int) Math.ceil((double) totalElements / size);
-        int offset = page * size;
-
-        List<TransactionResponse> content = all.stream()
-                .skip(offset)
-                .limit(size)
-                .map(this::toTransactionResponse)
-                .toList();
-
-        Map<String, Object> response = new LinkedHashMap<>();
-        response.put("content", content);
-        response.put("totalElements", totalElements);
-        response.put("totalPages", totalPages);
-        response.put("number", page);
-        response.put("size", size);
-        return response;
+        Pageable pageable = PageRequest.of(pageNumber, pageSize, Sort.by("timestamp").ascending());
+        Page<Transactions> transactionsPage = transactionsRepository.findByAccountIdOrderByTimestampAsc(accountId, pageable);
+        return PaginationUtil.toPaginatedResponse(transactionsPage, this::toTransactionResponse);
     }
-
 
     private TransactionResponse toTransactionResponse(Transactions transaction) {
         TransactionResponse response = new TransactionResponse();
@@ -116,7 +87,6 @@ public class AccountsService {
         response.setTransferId(transaction.getTransfer().getId());
         return response;
     }
-
 
     private AccountResponse toResponse(Accounts account) {
         AccountResponse response = new AccountResponse();

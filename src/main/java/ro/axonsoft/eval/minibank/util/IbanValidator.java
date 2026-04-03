@@ -5,7 +5,7 @@ import java.util.Set;
 
 public class IbanValidator{
 
-    // Countries that issue IBANs (ISO 3166-1 alpha-2)
+    // Countries that issue IBANs
     private static final Set<String> VALID_IBAN_COUNTRIES = Set.of(
             "AL","AD","AT","AZ","BH","BE","BA","BR","BG","CR","HR","CY","CZ","DK",
             "DO","EE","FO","FI","FR","GE","DE","GI","GR","GL","GT","HU","IS","IE",

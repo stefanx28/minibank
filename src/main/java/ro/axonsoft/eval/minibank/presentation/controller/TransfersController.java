@@ -28,12 +28,7 @@ public class TransfersController {
     }
 
     @GetMapping
-    public Map<String, Object> getAllTransfers(
-            @RequestParam(required = false) String iban,
-            @RequestParam(required = false) Instant fromDate,
-            @RequestParam(required = false) Instant toDate,
-            @RequestParam(defaultValue = "0") int page,
-            @RequestParam(defaultValue = "10") int size) {
+    public Map<String, Object> getAllTransfers(@RequestParam(required = false) String iban, @RequestParam(required = false) Instant fromDate, @RequestParam(required = false) Instant toDate, @RequestParam(defaultValue = "0") int page, @RequestParam(defaultValue = "10") int size) {
         return transfersService.getAllTransfers(iban, fromDate, toDate, page, size);
     }
 

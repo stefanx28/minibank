@@ -3,6 +3,9 @@ package ro.axonsoft.eval.minibank.bl.service;
 
 import jakarta.transaction.Transactional;
 import lombok.AllArgsConstructor;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 import ro.axonsoft.eval.minibank.bl.dto.request.TransferCreateRequest;
 import ro.axonsoft.eval.minibank.bl.dto.response.TransferResponse;
@@ -17,6 +20,7 @@ import ro.axonsoft.eval.minibank.dal.repository.AccountsRepository;
 import ro.axonsoft.eval.minibank.dal.repository.TransactionsRepository;
 import ro.axonsoft.eval.minibank.dal.repository.TransfersRepository;
 import ro.axonsoft.eval.minibank.util.IbanValidator;
+import ro.axonsoft.eval.minibank.util.PaginationUtil;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
@@ -52,7 +56,6 @@ public class TransfersService {
     7.savings account
      */
 
-
     @Transactional
     public TransferResponse createTransfer(TransferCreateRequest request){
 
@@ -70,26 +73,17 @@ public class TransfersService {
             }
         }
 
+        //do the checks
         validateTransfer(request, sourceAccount, targetAccount);
-
-        //exchange
-        Currency srcCurrency = sourceAccount.getCurrency();
-        Currency targetCurrency = targetAccount.getCurrency();
-        BigDecimal amount = request.getAmount().setScale(2, RoundingMode.HALF_EVEN);
-        BigDecimal convertedAmount = null;
-        BigDecimal exchangeRate = null;
-
-
-        if(srcCurrency != targetCurrency){
-            exchangeRate = exchangeRatesService.getRate(srcCurrency)
-                    .divide(exchangeRatesService.getRate(targetCurrency), 6, RoundingMode.HALF_EVEN);
-            convertedAmount = amount.multiply(exchangeRate).setScale(2, RoundingMode.HALF_EVEN);
-        }
-
-        BigDecimal targetAmount = convertedAmount != null ? convertedAmount : amount;
+        //handle conversion
+        BigDecimal[] exchangeResult = handleExchange(sourceAccount, targetAccount, request);
+        BigDecimal targetAmount = exchangeResult[0];
+        BigDecimal exchangeRate = exchangeResult[1];
+        BigDecimal convertedAmount = (exchangeRate != null) ? targetAmount : null;
+        BigDecimal amount = request.getAmount();
 
         boolean isCentralBankAccount = sourceAccount.getId().equals(BANK_ACCOUNT_ID);
-        //modify balance
+        //modify balance for source and target
         if(!isCentralBankAccount){
             sourceAccount.setBalance(sourceAccount.getBalance().subtract(amount).setScale(2, RoundingMode.HALF_EVEN));
             accountsRepository.save(sourceAccount);
@@ -97,50 +91,56 @@ public class TransfersService {
         targetAccount.setBalance(targetAccount.getBalance().add(targetAmount).setScale(2, RoundingMode.HALF_EVEN));
 
         //finally save transfer
-        Transfers transfer = TransferMapper.toEntity(request, amount, srcCurrency, targetCurrency, exchangeRate, convertedAmount);
+        Transfers transfer = TransferMapper.toEntity(request, amount, sourceAccount.getCurrency(), targetAccount.getCurrency(), exchangeRate, convertedAmount);
         Transfers saved = transfersRepository.save(transfer);
-
+        //create transaction after successful transfer
         createTransaction(sourceAccount, targetAccount, saved, amount, targetAmount);
         return toResponse(saved);
     }
 
 
-    public TransferResponse getTransfer(Long id) {
-        Transfers transfer = transfersRepository.findById(id)
-                .orElseThrow(() -> new TransferNotFoundException("Transfer not found: " + id));
+    public TransferResponse getTransfer(Long transferId) {
+        Transfers transfer = transfersRepository.findById(transferId)
+                .orElseThrow(() -> new TransferNotFoundException("Transfer not found: " + transferId));
         return toResponse(transfer);
     }
 
-    public Map<String, Object> getAllTransfers(String iban, Instant fromDate, Instant toDate, int page, int size) {
-        List<Transfers> allTransfers;
+    public Map<String, Object> getAllTransfers(String iban, Instant fromDate, Instant toDate, int pageNumber, int pageSize) {
 
-        allTransfers = transfersRepository.findAll();
+        List<Transfers> allTransfers = transfersRepository.findAll().stream()
+                .filter(t -> iban == null || iban.equals(t.getSourceIban()) || iban.equals(t.getTargetIban()))
+                .filter(t -> fromDate == null || !t.getCreatedAt().isBefore(fromDate))
+                .filter(t -> toDate == null || !t.getCreatedAt().isAfter(toDate))
+                .toList();
 
-        // apply date filters
-        if (fromDate != null) {//filter by fromDate
-            allTransfers = allTransfers.stream().filter(t -> !t.getCreatedAt().isBefore(fromDate)).toList();
-        }
-        if (toDate != null) {//filter by todate boolean
-            allTransfers = allTransfers.stream().filter(t -> !t.getCreatedAt().isAfter(toDate)).toList();
-        }
-
-        int totalElements = allTransfers.size();
-        int totalPages = (int) Math.ceil((double) totalElements / size);
-        int offset = page * size;
-
-        List<TransferResponse> content = allTransfers.stream()
-                .skip(offset)
-                .limit(size)
+        List<TransferResponse> allResponses = allTransfers.stream()
                 .map(this::toResponse)
                 .toList();
 
-        Map<String, Object> response = new LinkedHashMap<>();
-        response.put("content", content);
-        response.put("totalElements", totalElements);
-        response.put("totalPages", totalPages);
-        response.put("number", page);
-        response.put("size", size);
-        return response;
+        Page<TransferResponse> pageResult = new PageImpl<>(
+                allResponses,
+                PageRequest.of(pageNumber, pageSize),
+                allResponses.size()
+        );
+
+        return PaginationUtil.toPaginatedResponse(pageResult, t -> t);
+    }
+    private BigDecimal[] handleExchange(Accounts sourceAccount, Accounts targetAccount, TransferCreateRequest request){
+        Currency srcCurrency = sourceAccount.getCurrency();
+        Currency targetCurrency = targetAccount.getCurrency();
+        BigDecimal amount = request.getAmount().setScale(2, RoundingMode.HALF_EVEN);
+        BigDecimal exchangeRate = null;
+        boolean needsConversion = srcCurrency != targetCurrency;
+        BigDecimal targetAmount;
+
+        if (needsConversion) {
+            exchangeRate = exchangeRatesService.getRate(srcCurrency)
+                    .divide(exchangeRatesService.getRate(targetCurrency), 6, RoundingMode.HALF_EVEN);
+            targetAmount = amount.multiply(exchangeRate).setScale(2, RoundingMode.HALF_EVEN);
+        } else {
+            targetAmount = amount;
+        }
+        return new BigDecimal[]{targetAmount, exchangeRate};
     }
 
     private void validateTransfer(TransferCreateRequest request, Accounts sourceAccount, Accounts targetAccount){
@@ -241,7 +241,5 @@ public class TransfersService {
             throw new DailyLimitExceededException("Daily limit of 5000 EUR for SAVINGS account exceeded");
         }
     }
-
-
 
 }
