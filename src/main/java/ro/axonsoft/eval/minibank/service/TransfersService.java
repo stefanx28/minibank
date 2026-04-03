@@ -6,14 +6,12 @@ import lombok.AllArgsConstructor;
 import org.springframework.stereotype.Service;
 import ro.axonsoft.eval.minibank.dto.request.TransferCreateRequest;
 import ro.axonsoft.eval.minibank.dto.response.TransferResponse;
-import ro.axonsoft.eval.minibank.exception.AccountNotFoundException;
-import ro.axonsoft.eval.minibank.exception.DailyLimitExceededException;
-import ro.axonsoft.eval.minibank.exception.InsufficientFundsException;
-import ro.axonsoft.eval.minibank.exception.TransferNotFoundException;
+import ro.axonsoft.eval.minibank.exception.*;
 import ro.axonsoft.eval.minibank.model.*;
 import ro.axonsoft.eval.minibank.repository.AccountsRepository;
 import ro.axonsoft.eval.minibank.repository.TransactionsRepository;
 import ro.axonsoft.eval.minibank.repository.TransfersRepository;
+import ro.axonsoft.eval.minibank.util.IbanValidator;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
@@ -60,12 +58,15 @@ public class TransfersService {
         }
 
         //check iban exists
-        Accounts src = accountsRepository.findByIban(request.getSourceIban())
+        Accounts src = accountsRepository.findByIbanForUpdate(request.getSourceIban())
                 .orElseThrow(() -> new AccountNotFoundException("Source account not found"));
-        Accounts target = accountsRepository.findByIban(request.getTargetIban())
+        Accounts target = accountsRepository.findByIbanForUpdate(request.getTargetIban())
                 .orElseThrow(() -> new AccountNotFoundException("Target account not found"));
 
         //check for SEPA TODO
+        if(!IbanValidator.isSepa(src.getIban()) || !IbanValidator.isSepa(target.getIban())){
+            throw new NonSepaException("Transfer must be between SEPA countries");
+        }
 
         //check balance
         if(!src.getId().equals(BANK_ACCOUNT_ID)){

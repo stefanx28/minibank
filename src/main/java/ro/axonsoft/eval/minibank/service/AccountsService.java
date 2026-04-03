@@ -9,10 +9,13 @@ import ro.axonsoft.eval.minibank.dto.response.TransactionResponse;
 import ro.axonsoft.eval.minibank.exception.AccountNotFoundException;
 import ro.axonsoft.eval.minibank.dto.request.AccountCreateRequest;
 import ro.axonsoft.eval.minibank.dto.response.AccountResponse;
+import ro.axonsoft.eval.minibank.exception.InvalidIbanException;
 import ro.axonsoft.eval.minibank.model.Accounts;
 import ro.axonsoft.eval.minibank.model.Transactions;
 import ro.axonsoft.eval.minibank.repository.AccountsRepository;
 import ro.axonsoft.eval.minibank.repository.TransactionsRepository;
+import ro.axonsoft.eval.minibank.util.IbanValidator;
+
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
@@ -30,6 +33,9 @@ public class AccountsService {
     @Transactional
     public AccountResponse createAccount(AccountCreateRequest request){
 
+        if(!IbanValidator.isValid(request.getIban())){
+            throw new InvalidIbanException("Iban invalid");
+        }
 
         Accounts account = new Accounts();
         account.setOwnerName(request.getOwnerName());
@@ -42,6 +48,7 @@ public class AccountsService {
 
         return toResponse(saved);
     }
+
 
     public AccountResponse getAccount(Long id){
         Accounts account = accountsRepository.findById(id).orElseThrow(
