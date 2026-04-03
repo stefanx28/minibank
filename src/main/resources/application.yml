@@ -30,3 +30,9 @@ management:
 
 server:
   port: 8080
+
+bank:
+    iban: RO49AAAA1B31007593840000
+    owner-name: Bank
+    currency: RON
+    account-type: CHECKING
