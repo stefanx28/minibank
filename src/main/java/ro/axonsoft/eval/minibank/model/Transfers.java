@@ -25,10 +25,10 @@ public class Transfers {
     private BigDecimal amount;
 
     @Column(nullable = false, length = 3)
-    private String currency;
+    private Currency currency;
 
     @Column(length = 3)
-    private String targetCurrency;
+    private Currency targetCurrency;
 
     @Column(precision = 19, scale = 6)
     private BigDecimal exchangeRate;
