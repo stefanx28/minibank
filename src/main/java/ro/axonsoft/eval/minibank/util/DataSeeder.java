@@ -4,10 +4,10 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.boot.CommandLineRunner;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
-import ro.axonsoft.eval.minibank.model.AccountType;
-import ro.axonsoft.eval.minibank.model.Accounts;
-import ro.axonsoft.eval.minibank.model.Currency;
-import ro.axonsoft.eval.minibank.repository.AccountsRepository;
+import ro.axonsoft.eval.minibank.domain.enums.AccountType;
+import ro.axonsoft.eval.minibank.domain.model.Accounts;
+import ro.axonsoft.eval.minibank.domain.enums.Currency;
+import ro.axonsoft.eval.minibank.dal.repository.AccountsRepository;
 
 import java.math.BigDecimal;
 
