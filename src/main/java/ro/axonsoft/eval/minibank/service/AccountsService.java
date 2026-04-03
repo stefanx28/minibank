@@ -9,6 +9,7 @@ import ro.axonsoft.eval.minibank.dto.response.TransactionResponse;
 import ro.axonsoft.eval.minibank.exception.AccountNotFoundException;
 import ro.axonsoft.eval.minibank.dto.request.AccountCreateRequest;
 import ro.axonsoft.eval.minibank.dto.response.AccountResponse;
+import ro.axonsoft.eval.minibank.exception.DuplicateIbanException;
 import ro.axonsoft.eval.minibank.exception.InvalidIbanException;
 import ro.axonsoft.eval.minibank.model.Accounts;
 import ro.axonsoft.eval.minibank.model.Transactions;
@@ -36,6 +37,11 @@ public class AccountsService {
         if(!IbanValidator.isValid(request.getIban())){
             throw new InvalidIbanException("Iban invalid");
         }
+
+        if (accountsRepository.existsByIban(request.getIban())) {
+            throw new DuplicateIbanException("IBAN already in use: " + request.getIban());
+        }
+
 
         Accounts account = new Accounts();
         account.setOwnerName(request.getOwnerName());

@@ -57,6 +57,10 @@ public class TransfersService {
             }
         }
 
+        if (request.getAmount() == null || request.getAmount().compareTo(BigDecimal.ZERO) <= 0) {
+            throw new InvalidAmountException("Amount must be positive");
+        }
+
         //check iban exists
         Accounts src = accountsRepository.findByIbanForUpdate(request.getSourceIban())
                 .orElseThrow(() -> new AccountNotFoundException("Source account not found"));
