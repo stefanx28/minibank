@@ -51,8 +51,16 @@ public class TransfersService {
     6.exchange rates and currency
     7.savings account
      */
+
+
     @Transactional
     public TransferResponse createTransfer(TransferCreateRequest request){
+
+        //check iban exists
+        Accounts sourceAccount = accountsRepository.findByIbanForUpdate(request.getSourceIban())
+                .orElseThrow(() -> new AccountNotFoundException("Source account not found"));
+        Accounts targetAccount = accountsRepository.findByIbanForUpdate(request.getTargetIban())
+                .orElseThrow(() -> new AccountNotFoundException("Target account not found"));
 
         //if key present, find if exists and return, else create
         if(request.getIdempotencyKey() != null){
@@ -61,44 +69,15 @@ public class TransfersService {
                 return toResponse(existing.get());
             }
         }
-        boolean isAmountValid = request.getAmount() == null || request.getAmount().compareTo(BigDecimal.ZERO) <= 0;
 
-        if (isAmountValid) {
-            throw new InvalidAmountException("Amount must be positive");
-        }
-
-        //check iban exists
-        Accounts src = accountsRepository.findByIbanForUpdate(request.getSourceIban())
-                .orElseThrow(() -> new AccountNotFoundException("Source account not found"));
-        Accounts target = accountsRepository.findByIbanForUpdate(request.getTargetIban())
-                .orElseThrow(() -> new AccountNotFoundException("Target account not found"));
-
-        //check for SEPA
-        boolean isSEPATransfer = IbanValidator.isSepa(src.getIban())||!IbanValidator.isSepa(target.getIban());
-
-        if(!isSEPATransfer){
-            throw new NonSepaException("Transfer must be between SEPA countries");
-        }
-
-        //check balance
-        boolean isCentralBankAccount = src.getId().equals(BANK_ACCOUNT_ID);
-        boolean isBalancePositive = src.getBalance().compareTo(request.getAmount()) < 0;
-        if(isBalancePositive && !isCentralBankAccount){
-                throw new InsufficientFundsException("Insufficient funds on account:" + src.getId());
-            }
-
-        //check savings limit
-        if(src.getAccountType() == AccountType.SAVINGS){
-            checkSavingsLimit(src, request.getAmount());
-        }
+        validateTransfer(request, sourceAccount, targetAccount);
 
         //exchange
-        Currency srcCurrency = src.getCurrency();
-        Currency targetCurrency = target.getCurrency();
+        Currency srcCurrency = sourceAccount.getCurrency();
+        Currency targetCurrency = targetAccount.getCurrency();
         BigDecimal amount = request.getAmount().setScale(2, RoundingMode.HALF_EVEN);
         BigDecimal convertedAmount = null;
         BigDecimal exchangeRate = null;
-
 
 
         if(srcCurrency != targetCurrency){
@@ -109,25 +88,21 @@ public class TransfersService {
 
         BigDecimal targetAmount = convertedAmount != null ? convertedAmount : amount;
 
+        boolean isCentralBankAccount = sourceAccount.getId().equals(BANK_ACCOUNT_ID);
         //modify balance
         if(!isCentralBankAccount){
-            src.setBalance(src.getBalance().subtract(amount).setScale(2, RoundingMode.HALF_EVEN));
-            accountsRepository.save(src);
+            sourceAccount.setBalance(sourceAccount.getBalance().subtract(amount).setScale(2, RoundingMode.HALF_EVEN));
+            accountsRepository.save(sourceAccount);
         }
-
-        target.setBalance(target.getBalance().add(targetAmount).setScale(2, RoundingMode.HALF_EVEN));
+        targetAccount.setBalance(targetAccount.getBalance().add(targetAmount).setScale(2, RoundingMode.HALF_EVEN));
 
         //finally save transfer
         Transfers transfer = TransferMapper.toEntity(request, amount, srcCurrency, targetCurrency, exchangeRate, convertedAmount);
-
         Transfers saved = transfersRepository.save(transfer);
 
-        createTransaction(src, target, saved, amount, targetAmount);
-
+        createTransaction(sourceAccount, targetAccount, saved, amount, targetAmount);
         return toResponse(saved);
     }
-
-
 
 
     public TransferResponse getTransfer(Long id) {
@@ -139,11 +114,6 @@ public class TransfersService {
     public Map<String, Object> getAllTransfers(String iban, Instant fromDate, Instant toDate, int page, int size) {
         List<Transfers> allTransfers;
 
-//        if (iban != null) {
-//            all = transfersRepository.findBySourceIbanOrTargetIban(iban, iban);
-//        } else {
-//
-//        }
         allTransfers = transfersRepository.findAll();
 
         // apply date filters
@@ -171,6 +141,34 @@ public class TransfersService {
         response.put("number", page);
         response.put("size", size);
         return response;
+    }
+
+    private void validateTransfer(TransferCreateRequest request, Accounts sourceAccount, Accounts targetAccount){
+
+        boolean isAmountValid = request.getAmount() == null || request.getAmount().compareTo(BigDecimal.ZERO) <= 0;
+
+        if (isAmountValid) {
+            throw new InvalidAmountException("Amount must be positive");
+        }
+
+        //check for SEPA
+        boolean isSEPATransfer = IbanValidator.isSepa(sourceAccount.getIban())||!IbanValidator.isSepa(targetAccount.getIban());
+
+        if(!isSEPATransfer){
+            throw new NonSepaException("Transfer must be between SEPA countries");
+        }
+
+        //check balance
+        boolean isCentralBankAccount = sourceAccount.getId().equals(BANK_ACCOUNT_ID);
+        boolean isBalancePositive = sourceAccount.getBalance().compareTo(request.getAmount()) < 0;
+        if(isBalancePositive && !isCentralBankAccount){
+            throw new InsufficientFundsException("Insufficient funds on account:" + sourceAccount.getId());
+        }
+
+        //check savings limit
+        if(sourceAccount.getAccountType() == AccountType.SAVINGS){
+            checkSavingsLimit(sourceAccount, request.getAmount());
+        }
     }
 
 
